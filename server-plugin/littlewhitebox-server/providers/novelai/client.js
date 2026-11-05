@@ -387,12 +387,12 @@ async function generateV5ImageBuffer(options) {
     const elapsedMs = Date.now() - startedAt;
     console.info(
         `[${pluginName}] NovelAI V5 final arrived ${elapsedMs}ms after response opened; `
-        + `received ${image.streamBytes} stream bytes and retained ${image.buffer.length} PNG bytes`,
+        + `received ${image.streamBytes} stream bytes and retained ${image.buffer.length} bytes (${image.mime})`,
     );
     return {
         ok: true,
         buffer: image.buffer,
-        mime: 'image/png',
+        mime: image.mime,
     };
 }
 

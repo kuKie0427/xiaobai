@@ -49,8 +49,12 @@ async function readNovelV5FinalImage(response, options = {}) {
             { body: Readable.toWeb(counter) },
             options,
         );
+        // 旧版 vendor 返回裸 Uint8Array；当前 vendor 返回 { bytes, mime }（V5 已支持 JPEG/WebP/GIF）。
+        const bytes = image?.bytes instanceof Uint8Array ? image.bytes : image;
+        const mime = typeof image?.mime === 'string' && image.mime ? image.mime : 'image/png';
         return {
-            buffer: Buffer.from(image),
+            buffer: Buffer.from(bytes),
+            mime,
             streamBytes,
         };
     } finally {

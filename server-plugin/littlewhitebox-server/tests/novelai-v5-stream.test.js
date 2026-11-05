@@ -54,6 +54,15 @@ test('decodes a compressed V5 stream from a non-compliant upstream', async () =>
     assert.equal(result.streamBytes, stream.length);
 });
 
+test('keeps the detected MIME for non-PNG V5 final images', async () => {
+    const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(8, 0x01)]);
+    const stream = frame({ event_type: 'final', image: JPEG, samp_ix: 0 });
+    const result = await readNovelV5FinalImage(responseFromChunks([stream]));
+
+    assert.deepEqual(result.buffer, JPEG);
+    assert.equal(result.mime, 'image/jpeg');
+});
+
 test('closes an upstream response that declares an unsupported compression', async () => {
     const response = responseFromChunks([], { 'content-encoding': 'compress' });
 
@@ -106,9 +115,9 @@ test('rejects invalid sample, event, and final image data', async () => {
     );
     await assert.rejects(
         readNovelV5FinalImage(responseFromChunks([
-            frame({ event_type: 'final', image: Uint8Array.of(1, 2, 3), samp_ix: 0 }),
+            frame({ event_type: 'final', image: null, samp_ix: 0 }),
         ])),
-        /有效的 PNG 图片/,
+        /没有有效的图片数据/,
     );
 });
 
