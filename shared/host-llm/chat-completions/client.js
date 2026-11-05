@@ -447,7 +447,7 @@ async function streamCompletion(payload = {}, onEvent, options = {}, dependencie
             );
             throw new Error(message);
         }
-        console.debug('[HostLLM] stream event', source, {
+        console.debug('[HostLLM] stream event', request.body?.chat_completion_source, {
             model: event?.model || event?.modelVersion,
             finishReason: event?.candidates?.[0]?.finishReason,
             snippet: String(event?.candidates?.[0]?.content?.parts?.[0]?.text || '').slice(0, 60),

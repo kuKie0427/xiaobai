@@ -20575,7 +20575,7 @@ async function F0(e = {}, t, n = {}, o = {}) {
       const d = dn(c.error?.message || c.message || JSON.stringify(c.error), "酒馆后端流式生成失败");
       throw new Error(d);
     }
-    console.debug("[HostLLM] stream event", source, {
+    console.debug("[HostLLM] stream event", r.body?.chat_completion_source, {
       model: c?.model || c?.modelVersion,
       finishReason: c?.candidates?.[0]?.finishReason,
       snippet: String(c?.candidates?.[0]?.content?.parts?.[0]?.text || "").slice(0, 60),
