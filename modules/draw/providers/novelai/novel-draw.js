@@ -46,8 +46,10 @@ import {
     updateSharedDrawSettingsPersistent,
     normalizeSharedCacheDays,
     normalizeImageTitleMode,
+    normalizePlannerModelConfig,
     mergeNovelDrawProviderSettingsIntoStorageRoot,
 } from "../../shared/draw-settings.js";
+import { pullModelsForProvider } from "../../../agent-core/ui/settings-panel.js";
 import { getLastDrawAgentDiagnostic } from "../../shared/draw-agent.js";
 import { attachDrawAgentSettingsSurface } from "../../shared/agent-settings-surface.js";
 import { createSerialImageRequestQueue } from "../../shared/serial-image-request-queue.js";
@@ -1309,6 +1311,7 @@ function getRuntimeSettings() {
         cacheDays: sharedSettings.cacheDays,
         useWorldInfo: sharedSettings.useWorldInfo,
         plannerMaxRetries: sharedSettings.plannerMaxRetries,
+        plannerModel: sharedSettings.plannerModel,
         characterTags: sharedSettings.characterTags,
         characterGroups: sharedSettings.characterGroups,
         characterGroupPresets: sharedSettings.characterGroupPresets,
@@ -4128,6 +4131,40 @@ async function handleFrameMessage(event) {
                 if (iframe) postToIframe(iframe, { type: 'STATE_PATCH', patch: { maxImages: nextMax } }, 'LittleWhiteBox-NovelDraw');
             }
             postStatus(ok ? 'success' : 'error', ok ? '已保存要求出图数' : '保存失败', 'api');
+            break;
+        }
+
+        case 'SAVE_PLANNER_MODEL': {
+            const next = normalizePlannerModelConfig(data.plannerModel);
+            const ok = await updateSharedDrawSettingsPersistent((settings) => {
+                settings.plannerModel = next;
+            }, '已保存', { notify: false, silent: false });
+            if (ok) {
+                const iframe = document.getElementById('xiaobaix-novel-draw-iframe');
+                if (iframe) postToIframe(iframe, { type: 'STATE_PATCH', patch: { plannerModel: next } }, 'LittleWhiteBox-NovelDraw');
+            }
+            postStatus(ok ? 'success' : 'error', ok ? (next.mode === 'custom' ? '规划模型已独立配置' : '规划模型已恢复跟随主预设') : '保存失败', 'llm');
+            break;
+        }
+
+        case 'PULL_PLANNER_MODELS': {
+            const config = normalizePlannerModelConfig(data.plannerModel);
+            const iframe = document.getElementById('xiaobaix-novel-draw-iframe');
+            const patch = { plannerModelPulling: false };
+            try {
+                const models = await pullModelsForProvider({
+                    provider: config.provider,
+                    baseUrl: config.baseUrl,
+                    apiKey: config.apiKey,
+                });
+                patch.plannerModelOptions = (Array.isArray(models) ? models : []).map(String);
+                postStatus('success', `已拉取 ${patch.plannerModelOptions.length} 个模型`, 'llm');
+            } catch (error) {
+                console.error('[NovelDraw] 拉取规划模型列表失败:', error);
+                postStatus('error', `拉取模型列表失败：${error?.message || '网络异常'}`, 'llm');
+            } finally {
+                if (iframe) postToIframe(iframe, { type: 'STATE_PATCH', patch }, 'LittleWhiteBox-NovelDraw');
+            }
             break;
         }
 

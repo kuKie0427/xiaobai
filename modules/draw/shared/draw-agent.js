@@ -4,6 +4,7 @@ import {
     isSillyTavernProvider,
     resolveActiveProviderConfig,
 } from '../../agent-core/provider-resolution.js';
+import { normalizePlannerModelConfig } from './draw-settings.js';
 import {
     assertDrawScenePlannerTask,
     beginDrawScenePlannerDiagnostic,
@@ -136,8 +137,97 @@ function resolveDrawProviderConfig(rawSettings, timeout) {
 
 export async function resolveDrawAgentProviderConfig(options = {}) {
     const dependencies = options.dependencies || {};
+    const plannerModel = await readPlannerModelConfig(dependencies);
+    if (plannerModel.mode === 'custom') {
+        return resolveCustomDrawPlannerProviderConfig(plannerModel, options.timeout);
+    }
     const rawSettings = await readAgentSettings(dependencies);
     return resolveDrawProviderConfig(rawSettings, options.timeout);
+}
+
+// 生图规划的独立模型配置（draw-settings.plannerModel，mode === 'custom' 时启用）。
+// 依赖可注入以便测试；默认从共享画图设置读取。
+// 默认读取失败（如宿主存储暂不可用）时回落 follow：退回“跟随共享主预设”的旧行为，
+// 比让整条规划链路硬失败更安全。注入 getPlannerModelConfig 的调用方错误仍会抛出。
+async function readPlannerModelConfig(dependencies = {}) {
+    if (typeof dependencies.getPlannerModelConfig === 'function') {
+        try {
+            return normalizePlannerModelConfig(await dependencies.getPlannerModelConfig());
+        } catch (error) {
+            throw new ScenePlannerError(
+                `生图规划模型配置读取失败：${error?.message || '未知错误'}`,
+                'AGENT_SETTINGS_LOAD_FAILED',
+                null,
+                { cause: error },
+            );
+        }
+    }
+    try {
+        const settings = await import('./draw-settings.js').then((module) => module.loadSharedDrawSettings());
+        return normalizePlannerModelConfig(settings?.plannerModel);
+    } catch (error) {
+        console.warn('[DrawAgent] 生图规划模型配置读取失败，按跟随共享主预设处理:', error);
+        return normalizePlannerModelConfig(null);
+    }
+}
+
+// 把独立配置包装成单预设的 Agent 配置，复用 normalizeAgentConfig / resolveActiveProviderConfig 的全套规范化，
+// 与共享主预设走完全相同的解析路径（温度、maxTokens、toolMode、酒馆 provider 专用字段等）。
+const CUSTOM_PLANNER_PRESET_NAME = '__draw_planner_model__';
+
+function resolveCustomDrawPlannerProviderConfig(plannerModel, timeout) {
+    const providerConfigShape = {
+        baseUrl: plannerModel.baseUrl,
+        apiKey: plannerModel.apiKey,
+        model: plannerModel.model,
+        temperature: plannerModel.temperature,
+        maxTokens: plannerModel.maxTokens || undefined,
+        toolMode: plannerModel.toolMode,
+    };
+    const rawSettings = {
+        presets: { [CUSTOM_PLANNER_PRESET_NAME]: { provider: plannerModel.provider, modelConfigs: { [plannerModel.provider]: providerConfigShape } } },
+        currentPresetName: CUSTOM_PLANNER_PRESET_NAME,
+    };
+    let settings;
+    let providerConfig;
+    try {
+        settings = normalizeAgentConfig(rawSettings);
+        providerConfig = resolveActiveProviderConfig(settings, {
+            timeoutMs: normalizeScenePlannerTimeout(timeout),
+        });
+        providerConfig = {
+            ...providerConfig,
+            reasoning: {
+                ...providerConfig.reasoning,
+                output: 'hide',
+            },
+        };
+    } catch (error) {
+        if (error instanceof ScenePlannerError) throw error;
+        throw new ScenePlannerError(
+            `生图规划模型配置无效：${error?.message || '未知错误'}`,
+            'AGENT_PRESET_INVALID',
+            null,
+            { cause: error },
+        );
+    }
+
+    if (!String(providerConfig.model || '').trim()) {
+        throw new ScenePlannerError('生图规划模型配置尚未选择模型。', 'MODEL_MISSING');
+    }
+
+    if (!isSillyTavernProvider(providerConfig.provider)
+        && !String(providerConfig.apiKey || '').trim()) {
+        throw new ScenePlannerError('生图规划模型配置缺少 API Key。', 'API_KEY_MISSING');
+    }
+
+    return {
+        settings,
+        providerConfig: {
+            ...providerConfig,
+            currentPresetName: '生图规划模型',
+        },
+    };
 }
 
 async function loadDrawAgentCoreForProvider(providerConfig, options = {}) {

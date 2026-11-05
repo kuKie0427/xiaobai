@@ -1583,6 +1583,72 @@ button.nd-vibe-badge:disabled { cursor: default; }
                     <p class="view-desc">共享 Agent 主预设</p>
                 </div>
 
+                <div class="card">
+                    <div class="card-title">规划模型（提示词生成）</div>
+                    <p class="form-hint">生图规划（提示词生成）使用的文本模型。默认跟随下方共享 Agent 主预设；切换为独立配置后，可单独指定接口与模型，互不影响。</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">模式</label>
+                            <select id="nd_planner_model_mode" class="input">
+                                <option value="follow">跟随共享 Agent 主预设</option>
+                                <option value="custom">独立配置</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">接口类型</label>
+                            <select id="nd_planner_provider" class="input">
+                                <option value="openai-compatible">OpenAI 兼容</option>
+                                <option value="openai-responses">OpenAI Responses</option>
+                                <option value="sillytavern-vertex">跟随酒馆</option>
+                                <option value="sillytavern-openai-compatible">酒馆 OpenAI 兼容</option>
+                                <option value="sillytavern-claude">酒馆 Claude</option>
+                                <option value="sillytavern-google">酒馆 Google AI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="google">Google AI</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="nd_planner_custom_fields">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">API 地址</label>
+                                <input id="nd_planner_base_url" type="text" class="input" placeholder="https://api.openai.com/v1" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">API Key</label>
+                                <input id="nd_planner_api_key" type="password" class="input" placeholder="sk-..." autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">模型</label>
+                                <div style="display:flex;gap:6px;">
+                                    <input id="nd_planner_model" type="text" class="input" list="nd_planner_model_options" placeholder="可拉取后选择或手填" autocomplete="off" style="flex:1;">
+                                    <datalist id="nd_planner_model_options"></datalist>
+                                    <button type="button" id="nd_planner_pull_models" class="btn" style="white-space:nowrap;" title="按 API 地址与 Key 拉取模型列表">拉取模型</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Tool Calling 模式</label>
+                                <select id="nd_planner_tool_mode" class="input">
+                                    <option value="native">原生 Tool Calling</option>
+                                    <option value="tagged-json">Tagged JSON 兼容模式</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Temperature (0-2)</label>
+                                <input id="nd_planner_temperature" type="number" class="input" min="0" max="2" step="0.1" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Max Tokens（0=默认）</label>
+                                <input id="nd_planner_max_tokens" type="number" class="input" min="0" step="1" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="nd-agent-settings-surface" class="draw-agent-settings-surface xb-agent-settings-surface">
                     <div class="draw-agent-settings-state"><i class="fa-solid fa-spinner fa-spin"></i><span>正在读取共享 Agent 主预设…</span></div>
                 </div>
@@ -2129,6 +2195,9 @@ let state = {
     imageTitleMode: 'overlay',
     autoGenerateImages: true,
     maxImages: 2,
+    plannerModel: { mode: 'follow', provider: 'openai-compatible', baseUrl: '', apiKey: '', model: '', temperature: 1, maxTokens: 0, toolMode: 'native' },
+    plannerModelOptions: [],
+    plannerModelPulling: false,
 };
 
 let gallerySummary = {};
@@ -2165,6 +2234,72 @@ function postToParent(payload) {
 
 function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── 规划模型（提示词生成）独立配置 ──────────────────────────────
+// 读写都走宿主：SAVE_PLANNER_MODEL 持久化，PULL_PLANNER_MODELS 拉模型列表。
+function readPlannerModelFromUI() {
+    return {
+        mode: $('nd_planner_model_mode').value === 'custom' ? 'custom' : 'follow',
+        provider: $('nd_planner_provider').value,
+        baseUrl: $('nd_planner_base_url').value.trim(),
+        apiKey: $('nd_planner_api_key').value.trim(),
+        model: $('nd_planner_model').value.trim(),
+        toolMode: $('nd_planner_tool_mode').value,
+        temperature: Math.max(0, Math.min(2, Number($('nd_planner_temperature').value) || 1)),
+        maxTokens: Math.max(0, Math.floor(Number($('nd_planner_max_tokens').value) || 0)),
+    };
+}
+
+function applyPlannerModelToUI() {
+    const config = state.plannerModel || {};
+    $('nd_planner_model_mode').value = config.mode === 'custom' ? 'custom' : 'follow';
+    $('nd_planner_provider').value = config.provider || 'openai-compatible';
+    $('nd_planner_base_url').value = config.baseUrl || '';
+    $('nd_planner_api_key').value = config.apiKey || '';
+    $('nd_planner_model').value = config.model || '';
+    $('nd_planner_tool_mode').value = config.toolMode === 'tagged-json' ? 'tagged-json' : 'native';
+    $('nd_planner_temperature').value = Number.isFinite(Number(config.temperature)) ? config.temperature : 1;
+    $('nd_planner_max_tokens').value = Math.max(0, Math.floor(Number(config.maxTokens) || 0));
+    syncPlannerModelFieldVisibility();
+    renderPlannerModelOptions();
+}
+
+function syncPlannerModelFieldVisibility() {
+    const custom = state.plannerModel?.mode === 'custom';
+    const fields = $('nd_planner_custom_fields');
+    if (fields) fields.style.display = custom ? '' : 'none';
+}
+
+function renderPlannerModelOptions() {
+    const datalist = $('nd_planner_model_options');
+    if (!datalist) return;
+    datalist.innerHTML = (state.plannerModelOptions || [])
+        .map(model => `<option value="${escapeHtml(model)}"></option>`)
+        .join('');
+}
+
+function bindPlannerModelControls() {
+    const commit = () => {
+        if (suppressChangeEvents) return;
+        state.plannerModel = readPlannerModelFromUI();
+        syncPlannerModelFieldVisibility();
+        postToParent({ type: 'SAVE_PLANNER_MODEL', plannerModel: state.plannerModel });
+    };
+    ['nd_planner_model_mode', 'nd_planner_provider', 'nd_planner_base_url', 'nd_planner_api_key',
+        'nd_planner_model', 'nd_planner_tool_mode', 'nd_planner_temperature', 'nd_planner_max_tokens',
+    ].forEach((id) => {
+        $(id).addEventListener('change', commit);
+    });
+    $('nd_planner_pull_models').addEventListener('click', () => {
+        if (state.plannerModelPulling) return;
+        state.plannerModelPulling = true;
+        const button = $('nd_planner_pull_models');
+        button.disabled = true;
+        button.textContent = '拉取中…';
+        state.plannerModel = readPlannerModelFromUI();
+        postToParent({ type: 'PULL_PLANNER_MODELS', plannerModel: state.plannerModel });
+    });
 }
 
 // blob 预览 URL 的 LRU 缓存上限：封面缩略图 + 弹窗当前页缩略图 + 主图的可见量级
@@ -3912,6 +4047,7 @@ function applyStateToUI() {
             : 'overlay';
         $('nd_auto_generate_images').checked = state.autoGenerateImages !== false;
         $('nd_max_images').value = Math.max(0, Math.min(20, Math.floor(Number(state.maxImages) || 0)));
+        applyPlannerModelToUI();
         $('nd_cache_count').textContent = state.cacheStats?.count || 0;
         $('nd_cache_size').textContent = (state.cacheStats?.sizeMB || 0) + ' MB';
 
@@ -5193,6 +5329,19 @@ window.addEventListener('message', event => {
                     state.maxImages = Math.max(0, Math.min(20, Math.floor(Number(patch.maxImages) || 0)));
                     $('nd_max_images').value = state.maxImages;
                 }
+                if (patch.plannerModelOptions !== undefined) {
+                    state.plannerModelOptions = Array.isArray(patch.plannerModelOptions) ? patch.plannerModelOptions : [];
+                    renderPlannerModelOptions();
+                }
+                if (patch.plannerModelPulling === false) {
+                    state.plannerModelPulling = false;
+                    const pullButton = $('nd_planner_pull_models');
+                    if (pullButton) { pullButton.disabled = false; pullButton.textContent = '拉取模型'; }
+                }
+                if (patch.plannerModel && typeof patch.plannerModel === 'object') {
+                    state.plannerModel = patch.plannerModel;
+                    applyPlannerModelToUI();
+                }
             } finally {
                 suppressChangeEvents = false;
             }
@@ -5587,6 +5736,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.maxImages = val;
         postToParent({ type: 'SAVE_MAX_IMAGES', maxImages: val });
     });
+
+    bindPlannerModelControls();
 
     $('nd_test_api').addEventListener('click', () => postToParent({
         type: 'TEST_API',

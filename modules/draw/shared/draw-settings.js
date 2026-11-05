@@ -25,6 +25,18 @@ const DEFAULT_SHARED_DRAW_SETTINGS = {
     characterGroupPresets: [],
     characterGroupPresetApplied: null,
     plannerMaxRetries: 3,
+    // 生图规划（提示词生成）的文本模型配置：follow = 跟随共享 Agent 主预设；custom = 独立一套 provider/key/模型。
+    // 与 normalizePlannerModelConfig(null) 的输出保持一致（不能在模块初始化时调用该函数：它依赖下方的 const）。
+    plannerModel: {
+        mode: 'follow',
+        provider: 'openai-compatible',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: '',
+        model: '',
+        temperature: 1,
+        maxTokens: 0,
+        toolMode: 'native',
+    },
     danbooruLocalDB: false,
     messageFilterRules: [],
     worldbooks: { enabled: false, uploadedBooks: [], keywordFilterMode: 'auto' },
@@ -33,6 +45,52 @@ const DEFAULT_SHARED_DRAW_SETTINGS = {
     jpegQuality: 0.8,
     updatedAt: 0,
 };
+
+export const PLANNER_MODEL_PROVIDERS = Object.freeze([
+    'openai-compatible',
+    'openai-responses',
+    'sillytavern-vertex',
+    'sillytavern-openai-compatible',
+    'sillytavern-claude',
+    'sillytavern-google',
+    'anthropic',
+    'google',
+]);
+
+export const PLANNER_MODEL_TOOL_MODES = Object.freeze(['native', 'tagged-json']);
+
+const PLANNER_MODEL_DEFAULT_BASE_URLS = Object.freeze({
+    'openai-compatible': 'https://api.openai.com/v1',
+    'openai-responses': 'https://api.openai.com/v1',
+    anthropic: 'https://api.anthropic.com',
+});
+
+/** 规划模型独立配置的规范化：字段宽松读取，非法值回落默认。mode 只认 follow / custom。 */
+export function normalizePlannerModelConfig(value = {}) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const mode = source.mode === 'custom' ? 'custom' : 'follow';
+    const provider = PLANNER_MODEL_PROVIDERS.includes(String(source.provider || '').trim())
+        ? String(source.provider).trim()
+        : 'openai-compatible';
+    const temperature = Number(source.temperature);
+    const maxTokens = Number(source.maxTokens);
+    return {
+        mode,
+        provider,
+        baseUrl: String(source.baseUrl ?? PLANNER_MODEL_DEFAULT_BASE_URLS[provider] ?? '').trim(),
+        apiKey: String(source.apiKey || '').trim(),
+        model: String(source.model || '').trim(),
+        temperature: Number.isFinite(temperature) ? Math.max(0, Math.min(2, temperature)) : 1,
+        maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? Math.floor(maxTokens) : 0,
+        toolMode: PLANNER_MODEL_TOOL_MODES.includes(String(source.toolMode || '').trim())
+            ? String(source.toolMode).trim()
+            : 'native',
+    };
+}
+
+export function isCustomPlannerModelConfig(value = {}) {
+    return normalizePlannerModelConfig(value).mode === 'custom';
+}
 
 const NOVEL_DRAW_PROVIDER_SETTING_KEYS = new Set([
     'configVersion',
@@ -151,6 +209,7 @@ export function normalizeSharedDrawSettings(saved = {}) {
         characterGroupPresets,
         characterGroupPresetApplied: source.characterGroupPresetApplied || null,
         plannerMaxRetries,
+        plannerModel: normalizePlannerModelConfig(source.plannerModel),
         danbooruLocalDB: source.danbooruLocalDB === true,
         messageFilterRules,
         worldbooks: {
