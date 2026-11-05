@@ -281,7 +281,7 @@ async function waitFor(predicate, timeoutMs = 1000) {
 test('one backend runtime forwards changing browser planning schemas and executes the same images', async (t) => {
     const { createSubmitScenePlanTool } = await import('../../../modules/draw/shared/scene-plan-tool.js');
     const images = [{
-        insert_after: 1, scene: 'rain',
+        insert_after: 1, scene: 'rain', title: '雨幕',
         characterPrompts: [{ prompt: 'must not override the parsed characters' }],
         negative: 'must not override the recipe',
         characters: [{ name: '旅人', type: '女孩', appear: 'black hair', uc: null, nickname: 'ignored' }],
@@ -337,7 +337,7 @@ test('one backend runtime forwards changing browser planning schemas and execute
 });
 
 test('backend dispatches repaired complete plans and keeps incomplete or invalid plans out of image jobs', async (t) => {
-    const valid = JSON.stringify({ images: [{ insert_after: 1, scene: 'rain', characters: [] }] });
+    const valid = JSON.stringify({ images: [{ insert_after: 1, scene: 'rain', title: '雨幕', characters: [] }] });
     const cases = [
         [valid.slice(0, -1), 'missing_root_closer'],
         [valid + '}]', 'trailing_closers'],
@@ -387,7 +387,7 @@ test('backend dispatches repaired complete plans and keeps incomplete or invalid
 });
 
 test('backend retries a failed Agent request using the frozen planner.retry and never retries without it', async (t) => {
-    const valid = JSON.stringify({ images: [{ insert_after: 1, scene: 'rain', characters: [] }] });
+    const valid = JSON.stringify({ images: [{ insert_after: 1, scene: 'rain', title: '雨幕', characters: [] }] });
     const cases = [
         // [名称, 冻结的 retry, 前几次失败, 期望终态, 期望调用次数]
         ['recovers', { maxRetries: 3, baseDelayMs: 100 }, 2, 'dispatched', 3],
@@ -426,7 +426,7 @@ test('backend retries a failed Agent request using the frozen planner.retry and 
 });
 
 test('backend exposes which retry is running and keeps the failed attempts of earlier rounds', async (t) => {
-    const valid = JSON.stringify({ images: [{ insert_after: 1, scene: 'rain', characters: [] }] });
+    const valid = JSON.stringify({ images: [{ insert_after: 1, scene: 'rain', title: '雨幕', characters: [] }] });
     let calls = 0;
     const { manager } = createManager({
         runtime: drawRuntime,
@@ -475,7 +475,7 @@ test('active backend retry remains a retry in the frontend projection', async t 
             if (calls === 1) throw new Error('fetch failed');
             await held;
             return { toolCalls: [{ name: 'submit_scene_plan', arguments: JSON.stringify({ images: [
-                { insert_after: 1, scene: 'rain', characters: [] },
+                { insert_after: 1, scene: 'rain', title: '雨幕', characters: [] },
             ] }) }] };
         } }) },
     } });
@@ -493,7 +493,7 @@ test('backend dispatches a decorated tagged plan once and retains ambiguous-call
     const agentCore = require('../draw-runs/vendor/agent-core-node.cjs');
     t.mock.method(console, 'log', () => {});
     const payload = JSON.stringify({ name: 'submit_scene_plan', arguments: {
-        images: [{ insert_after: 1, scene: 'book cover, title: SUMMER', characters: [] }],
+        images: [{ insert_after: 1, scene: 'book cover, title: SUMMER', title: 'SUMMER', characters: [] }],
     } });
     const cases = [
         { body: `\`\`\`json\n${payload}\n\`\`\`\n</unexpected>[完成]<status value="[done]"/> "完成"` },
@@ -612,7 +612,7 @@ test('a permissive supplied schema cannot bypass image placement validation or i
                             calls += 1;
                             return { toolCalls: [{ name: 'submit_scene_plan', arguments: JSON.stringify({
                                 planning_notes: { custom: fullModelNote },
-                                images: [{ index: 1, insert_after: 42, scene: 'rain', characters: [] }],
+                                images: [{ index: 1, insert_after: 42, scene: 'rain', title: '雨幕', characters: [] }],
                             }) }] };
                         },
                     };
@@ -648,7 +648,7 @@ test('Draw Run delivers unordered and shared placements as distinct images witho
                         calls += 1;
                         return { toolCalls: [{ name: 'submit_scene_plan', arguments: JSON.stringify({
                             images: [2, 1, 2].map((point, index) => ({
-                                insert_after: point, scene: `image-${index}`, characters: [],
+                                insert_after: point, scene: `image-${index}`, title: `标题-${index}`, characters: [],
                             })),
                         }) }] };
                     },

@@ -1,5 +1,5 @@
 import { getContext } from "../../../../../../extensions.js";
-import { DRAW_CAPSULE_COPY } from './draw-capsule-copy.js';
+import { DRAW_CAPSULE_COPY, formatPlannerRetryProgress } from './draw-capsule-copy.js';
 import {
     getDisplayPreviewForSlot,
     getPreviewsBySlot,
@@ -103,12 +103,25 @@ export const DEFAULT_MESSAGE_FILTER_RULES = [
 ];
 
 export function toScenePlannerProgress(diagnostic = {}) {
-    const phase = diagnostic?.progress?.phase;
+    const progress = diagnostic?.progress;
+    const phase = progress?.phase;
+    if (phase === 'retry') {
+        // 重试阶段带上“第几次 / 共几次”，界面据此显示 `重1/3`。
+        // 放在专属的 retry 字段里，而不是顶层 current/total：楼层状态会把同楼层各任务的 current/total 求和覆盖到顶层
+        // （图片张数），多任务时顶层数字就不再是“第几次重试”。
+        const current = Number(progress.current);
+        const total = Number(progress.total);
+        return Number.isInteger(current) && current > 0 && Number.isInteger(total) && total >= current
+            ? { phase, retry: { current, total } }
+            : { phase };
+    }
     return { phase: phase === 'correction' ? 'correction' : 'analysis' };
 }
 
+/** 入参是 toScenePlannerProgress 的投影（可能被楼层状态合并过）：重试次数只认 retry 字段，不读会被求和覆盖的顶层 current/total。 */
 export function formatScenePlannerProgress(progress = {}) {
-    return DRAW_CAPSULE_COPY[toScenePlannerProgress({ progress }).phase];
+    if (progress?.phase === 'retry') return formatPlannerRetryProgress(progress.retry?.current, progress.retry?.total);
+    return DRAW_CAPSULE_COPY[progress?.phase === 'correction' ? 'correction' : 'analysis'];
 }
 
 export function createPlaceholder(slotId) {
