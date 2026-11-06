@@ -29,8 +29,8 @@ const DEFAULT_SHARED_DRAW_SETTINGS = {
     // 与 normalizePlannerModelConfig(null) 的输出保持一致（不能在模块初始化时调用该函数：它依赖下方的 const）。
     plannerModel: {
         mode: 'follow',
-        provider: 'openai-compatible',
-        baseUrl: 'https://api.openai.com/v1',
+        provider: 'sillytavern-openai-compatible',
+        baseUrl: '',
         apiKey: '',
         model: '',
         temperature: 1,
@@ -47,12 +47,14 @@ const DEFAULT_SHARED_DRAW_SETTINGS = {
 };
 
 export const PLANNER_MODEL_PROVIDERS = Object.freeze([
-    'openai-compatible',
-    'openai-responses',
-    'sillytavern-vertex',
+    // 经酒馆后端转发的类型放前面：扩展跑在浏览器里，直连类接口需要上游允许 CORS，
+    // 否则会直接 fetch 失败（表现为“连接失败”）。默认值也取这里第一个。
     'sillytavern-openai-compatible',
+    'sillytavern-vertex',
     'sillytavern-claude',
     'sillytavern-google',
+    'openai-compatible',
+    'openai-responses',
     'anthropic',
     'google',
 ]);
@@ -71,7 +73,7 @@ export function normalizePlannerModelConfig(value = {}) {
     const mode = source.mode === 'custom' ? 'custom' : 'follow';
     const provider = PLANNER_MODEL_PROVIDERS.includes(String(source.provider || '').trim())
         ? String(source.provider).trim()
-        : 'openai-compatible';
+        : 'sillytavern-openai-compatible';
     const temperature = Number(source.temperature);
     const maxTokens = Number(source.maxTokens);
     return {

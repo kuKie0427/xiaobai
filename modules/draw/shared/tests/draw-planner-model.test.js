@@ -138,7 +138,8 @@ test('normalizePlannerModelConfig 非法值回落默认且只认 follow/custom',
     assert.equal(isCustomPlannerModelConfig({ mode: 'custom' }), true);
     assert.equal(isCustomPlannerModelConfig({}), false);
     const normalized = normalizePlannerModelConfig({ provider: 'not-a-provider', temperature: 9, maxTokens: -5 });
-    assert.equal(normalized.provider, 'openai-compatible');
+    // 默认走酒馆后端转发：浏览器里直连类接口会撞 CORS
+    assert.equal(normalized.provider, 'sillytavern-openai-compatible');
     assert.equal(normalized.temperature, 2);
     assert.equal(normalized.maxTokens, 0);
 });

@@ -1586,6 +1586,7 @@ button.nd-vibe-badge:disabled { cursor: default; }
                 <div class="card">
                     <div class="card-title">规划模型（提示词生成）</div>
                     <p class="form-hint">生图规划（提示词生成）使用的文本模型。默认跟随下方共享 Agent 主预设；切换为独立配置后，可单独指定接口与模型，互不影响。</p>
+                    <p class="form-hint">直连类接口（OpenAI 兼容 / Responses / Anthropic / Google）由浏览器直接请求，需要上游允许跨域（CORS）；若报「连接失败」，请改用「酒馆 OpenAI 兼容 / 跟随酒馆」这类经酒馆后端转发的类型。</p>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">模式</label>
@@ -1597,14 +1598,14 @@ button.nd-vibe-badge:disabled { cursor: default; }
                         <div class="form-group">
                             <label class="form-label">接口类型</label>
                             <select id="nd_planner_provider" class="input">
-                                <option value="openai-compatible">OpenAI 兼容</option>
-                                <option value="openai-responses">OpenAI Responses</option>
+                                <option value="sillytavern-openai-compatible">酒馆 OpenAI 兼容（推荐）</option>
                                 <option value="sillytavern-vertex">跟随酒馆</option>
-                                <option value="sillytavern-openai-compatible">酒馆 OpenAI 兼容</option>
                                 <option value="sillytavern-claude">酒馆 Claude</option>
                                 <option value="sillytavern-google">酒馆 Google AI</option>
-                                <option value="anthropic">Anthropic</option>
-                                <option value="google">Google AI</option>
+                                <option value="openai-compatible">OpenAI 兼容（浏览器直连，需 CORS）</option>
+                                <option value="openai-responses">OpenAI Responses（直连，需 CORS）</option>
+                                <option value="anthropic">Anthropic（直连，需 CORS）</option>
+                                <option value="google">Google AI（直连，需 CORS）</option>
                             </select>
                         </div>
                     </div>
@@ -2195,7 +2196,7 @@ let state = {
     imageTitleMode: 'overlay',
     autoGenerateImages: true,
     maxImages: 2,
-    plannerModel: { mode: 'follow', provider: 'openai-compatible', baseUrl: '', apiKey: '', model: '', temperature: 1, maxTokens: 0, toolMode: 'native' },
+    plannerModel: { mode: 'follow', provider: 'sillytavern-openai-compatible', baseUrl: '', apiKey: '', model: '', temperature: 1, maxTokens: 0, toolMode: 'native' },
     plannerModelOptions: [],
     plannerModelPulling: false,
 };
